@@ -1,0 +1,18 @@
+#include<stdio.h> 
+#include<unistd.h> 
+#include<stdlib.h>
+
+int main() {
+    int pid;
+    pid = fork();
+    if(pid<0) {
+      printf("failure is process creation\n");
+      exit(0);
+    }
+    else if(pid==0) {
+      printf("child process\n");
+    }
+    else {
+      printf("parent process\n");
+    }
+}
