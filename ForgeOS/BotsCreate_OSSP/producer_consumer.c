@@ -1,0 +1,239 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <pthread.h>
+#include <time.h>
+#include <unistd.h>
+
+#define DATA_SIZE      2000000
+#define CHUNK_SIZE     10000
+#define BUFFER_SIZE    8
+#define DEFAULT_WORKERS 4
+
+static long *g_data = NULL;
+
+typedef struct {
+    long start;
+    long end;
+} WorkItem;
+
+typedef struct {
+    WorkItem items[BUFFER_SIZE];
+    int      count;
+    int      in;
+    int      out;
+    int      producer_done;
+
+    pthread_mutex_t mutex;
+    pthread_cond_t  not_full;
+    pthread_cond_t  not_empty;
+} BoundedBuffer;
+
+static BoundedBuffer g_buffer;
+
+static long long      g_result = 0;
+static pthread_mutex_t g_result_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static pthread_mutex_t g_print_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static double now_seconds(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return ts.tv_sec + ts.tv_nsec / 1e9;
+}
+
+static void buffer_init(BoundedBuffer *b) {
+    b->count = 0;
+    b->in = 0;
+    b->out = 0;
+    b->producer_done = 0;
+    pthread_mutex_init(&b->mutex, NULL);
+    pthread_cond_init(&b->not_full, NULL);
+    pthread_cond_init(&b->not_empty, NULL);
+}
+
+static void buffer_destroy(BoundedBuffer *b) {
+    pthread_mutex_destroy(&b->mutex);
+    pthread_cond_destroy(&b->not_full);
+    pthread_cond_destroy(&b->not_empty);
+}
+
+static void *producer_fn(void *arg) {
+    (void)arg;
+    long produced = 0;
+
+    for (long start = 0; start < DATA_SIZE; start += CHUNK_SIZE) {
+        long end = start + CHUNK_SIZE;
+        if (end > DATA_SIZE) end = DATA_SIZE;
+
+        WorkItem item = { start, end };
+
+        pthread_mutex_lock(&g_buffer.mutex);
+
+        while (g_buffer.count == BUFFER_SIZE) {
+            pthread_cond_wait(&g_buffer.not_full, &g_buffer.mutex);
+        }
+
+        g_buffer.items[g_buffer.in] = item;
+        g_buffer.in = (g_buffer.in + 1) % BUFFER_SIZE;
+        g_buffer.count++;
+        produced++;
+
+        pthread_cond_signal(&g_buffer.not_empty);
+        pthread_mutex_unlock(&g_buffer.mutex);
+    }
+
+    pthread_mutex_lock(&g_buffer.mutex);
+    g_buffer.producer_done = 1;
+    pthread_cond_broadcast(&g_buffer.not_empty);
+    pthread_mutex_unlock(&g_buffer.mutex);
+
+    pthread_mutex_lock(&g_print_mutex);
+    printf("[Producer] finished. Pushed %ld work items.\n", produced);
+    pthread_mutex_unlock(&g_print_mutex);
+
+    return NULL;
+}
+
+typedef struct {
+    int worker_id;
+    long chunks_processed;
+} WorkerArg;
+
+static void *worker_fn(void *arg) {
+    WorkerArg *w = (WorkerArg *)arg;
+
+    for (;;) {
+        WorkItem item;
+
+        pthread_mutex_lock(&g_buffer.mutex);
+
+        while (g_buffer.count == 0 && !g_buffer.producer_done) {
+            pthread_cond_wait(&g_buffer.not_empty, &g_buffer.mutex);
+        }
+
+        if (g_buffer.count == 0 && g_buffer.producer_done) {
+            pthread_mutex_unlock(&g_buffer.mutex);
+            break;
+        }
+
+        item = g_buffer.items[g_buffer.out];
+        g_buffer.out = (g_buffer.out + 1) % BUFFER_SIZE;
+        g_buffer.count--;
+
+        pthread_cond_signal(&g_buffer.not_full);
+        pthread_mutex_unlock(&g_buffer.mutex);
+
+        long long partial = 0;
+        for (long i = item.start; i < item.end; i++) {
+            partial += g_data[i] % 97;
+        }
+
+        pthread_mutex_lock(&g_result_mutex);
+        g_result += partial;
+        pthread_mutex_unlock(&g_result_mutex);
+
+        w->chunks_processed++;
+
+        pthread_mutex_lock(&g_print_mutex);
+        printf("  [Worker %d | tid=%lu] processed range [%ld, %ld) -> partial=%lld\n",
+               w->worker_id, (unsigned long)pthread_self(), item.start, item.end, partial);
+        pthread_mutex_unlock(&g_print_mutex);
+    }
+
+    pthread_mutex_lock(&g_print_mutex);
+    printf("[Worker %d] exiting. Total chunks processed: %ld\n",
+           w->worker_id, w->chunks_processed);
+    pthread_mutex_unlock(&g_print_mutex);
+
+    return NULL;
+}
+
+static long long run_sequential(void) {
+    long long total = 0;
+    for (long i = 0; i < DATA_SIZE; i++) {
+        total += g_data[i] % 97;
+    }
+    return total;
+}
+
+static long long run_multithreaded(int num_workers) {
+    g_result = 0;
+    buffer_init(&g_buffer);
+
+    pthread_t producer_tid;
+    pthread_t *worker_tids = malloc(sizeof(pthread_t) * num_workers);
+    WorkerArg *worker_args  = malloc(sizeof(WorkerArg) * num_workers);
+
+    for (int i = 0; i < num_workers; i++) {
+        worker_args[i].worker_id = i;
+        worker_args[i].chunks_processed = 0;
+    }
+
+    pthread_create(&producer_tid, NULL, producer_fn, NULL);
+
+    for (int i = 0; i < num_workers; i++) {
+        pthread_create(&worker_tids[i], NULL, worker_fn, &worker_args[i]);
+    }
+
+    pthread_join(producer_tid, NULL);
+    for (int i = 0; i < num_workers; i++) {
+        pthread_join(worker_tids[i], NULL);
+    }
+
+    buffer_destroy(&g_buffer);
+    free(worker_tids);
+    free(worker_args);
+
+    return g_result;
+}
+
+int main(int argc, char *argv[]) {
+    int num_workers = DEFAULT_WORKERS;
+    if (argc > 1) {
+        num_workers = atoi(argv[1]);
+        if (num_workers < 1) num_workers = DEFAULT_WORKERS;
+    }
+
+    long nprocs = sysconf(_SC_NPROCESSORS_ONLN);
+    printf("================================================================\n");
+    printf(" Multithreaded Linux App - POSIX Threads & Mutexes Demo\n");
+    printf("================================================================\n");
+    printf("Detected CPU cores : %ld\n", nprocs);
+    printf("Dataset size        : %d elements\n", DATA_SIZE);
+    printf("Chunk size          : %d elements/work item\n", CHUNK_SIZE);
+    printf("Bounded buffer size : %d slots\n", BUFFER_SIZE);
+    printf("Worker threads      : %d\n\n", num_workers);
+
+    g_data = malloc(sizeof(long) * DATA_SIZE);
+    for (long i = 0; i < DATA_SIZE; i++) {
+        g_data[i] = i;
+    }
+
+    printf(">>> Running sequential baseline...\n");
+    double t0 = now_seconds();
+    long long seq_result = run_sequential();
+    double t1 = now_seconds();
+    double seq_time = t1 - t0;
+    printf("Sequential result = %lld, time = %.4f s\n\n", seq_result, seq_time);
+
+    printf(">>> Running multithreaded producer-consumer version...\n");
+    double t2 = now_seconds();
+    long long par_result = run_multithreaded(num_workers);
+    double t3 = now_seconds();
+    double par_time = t3 - t2;
+
+    printf("\n================================================================\n");
+    printf(" RESULTS\n");
+    printf("================================================================\n");
+    printf("Sequential result   : %lld\n", seq_result);
+    printf("Multithreaded result: %lld\n", par_result);
+    printf("Match (correctness) : %s\n", (seq_result == par_result) ? "YES (race-free)" : "NO -- BUG!");
+    printf("Sequential time     : %.4f s\n", seq_time);
+    printf("Multithreaded time  : %.4f s\n", par_time);
+    if (par_time > 0.0)
+        printf("Speed-up            : %.2fx\n", seq_time / par_time);
+    printf("================================================================\n");
+
+    free(g_data);
+    return (seq_result == par_result) ? 0 : 1;
+}
