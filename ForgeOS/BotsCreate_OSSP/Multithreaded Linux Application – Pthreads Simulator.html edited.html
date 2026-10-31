@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Multithreaded Linux Application – Pthreads Simulator</title>
+<style>
+:root{--bg:#f1f4fd;--card:#ffffff;--card2:#e9eefb;--tx:#25274d;--mut:#6f7aa3;--g:#9b70e2;--b:#2f9be0;--r:#d6455d;--y:#b7791f;--ln:#d8def3;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:radial-gradient(900px 500px at 85% -5%,#5bb8f530,transparent),radial-gradient(700px 500px at 0% 20%,#a77fe638,transparent),var(--bg);background-attachment:fixed;color:var(--tx);font:15px/1.6 system-ui,-apple-system,Segoe UI,sans-serif}
+.mono,pre,code{font-family:ui-monospace,Menlo,Consolas,monospace}
+nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:#f1f4fdee;border-bottom:1px solid var(--ln);display:flex;gap:16px;padding:10px 18px;overflow-x:auto;white-space:nowrap}
+nav a{color:var(--mut);text-decoration:none;font-size:13px}nav a:hover{color:var(--g)}
+section{max-width:1060px;margin:auto;padding:48px 18px}
+h1{font-size:clamp(28px,6vw,52px);margin:0 0 8px;line-height:1.1}h2{font-size:26px;margin:0 0 6px}h2 span{color:var(--g)}
+.sub{color:var(--mut);margin:0 0 22px}.grad{background:linear-gradient(90deg,var(--g),var(--b));-webkit-background-clip:text;background-clip:text;color:transparent}
+.btn{background:var(--card2);color:var(--tx);border:1px solid var(--ln);padding:9px 18px;border-radius:8px;cursor:pointer;font:inherit}
+.btn:hover{border-color:var(--g);box-shadow:0 0 12px #9b70e244}.btn.p{background:var(--g);color:#fff;border:0;font-weight:700}
+.grid{display:grid;gap:14px}.g4{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}.g2{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.card{background:var(--card);border:1px solid var(--ln);border-radius:14px;padding:16px;box-shadow:0 8px 24px #3a4a9a18}
+.stat b{display:block;font-size:26px;color:var(--b)}.stat small{color:var(--mut)}.stat input{font:700 24px ui-monospace,Menlo,Consolas,monospace;color:var(--b);background:transparent;border:0;border-bottom:1px solid var(--ln);width:100%;padding:0;outline:0}.stat input:focus{border-color:var(--g)}.stat:hover{border-color:var(--b);transform:translateY(-2px);transition:.2s}
+.tag{display:inline-block;border:1px solid var(--ln);border-radius:20px;padding:2px 12px;margin:3px;font-size:12px;color:var(--g)}
+.hero{display:flex;gap:30px;flex-wrap:wrap;align-items:center}.hero>div{flex:1 1 320px}
+.lanes{display:grid;gap:8px}.lane{height:26px;background:var(--card2);border-radius:6px;overflow:hidden;position:relative}
+.lane i{position:absolute;top:3px;height:20px;width:44px;border-radius:4px;background:linear-gradient(90deg,var(--b),var(--g));animation:mv 3s linear infinite;box-shadow:0 0 10px var(--g)}
+@keyframes mv{from{left:-50px}to{left:100%}}
+.led{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--mut);margin-right:6px}.led.on{background:var(--g);box-shadow:0 0 8px var(--g)}.led.wait{background:var(--y);box-shadow:0 0 8px var(--y)}
+.bar{height:8px;background:var(--card2);border-radius:5px;overflow:hidden}.bar div{height:100%;width:0;background:linear-gradient(90deg,var(--b),var(--g));transition:width .15s}
+.slots{display:grid;grid-template-columns:repeat(8,1fr);gap:6px;margin:10px 0}
+.slot{height:44px;border:1px dashed var(--ln);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--mut)}
+.slot.f{border:1px solid var(--b);background:#2f9be018;color:var(--b);box-shadow:0 0 6px #2f9be033}
+.w .t{font-size:13px;color:var(--mut);min-height:20px}
+.lock{font-size:34px}.lockbox{text-align:center;border:2px solid var(--g);border-radius:12px;padding:12px;transition:.2s}.lockbox.l{border-color:var(--r);box-shadow:0 0 16px #d93a4f44}
+.term{background:#02050a;border:1px solid var(--ln);border-radius:10px;padding:14px;min-height:260px;max-height:360px;overflow:auto;font-size:12.5px;white-space:pre-wrap;color:#b8f5cf}
+.term .c{color:var(--b)}.term .e{color:var(--y)}
+.chart{display:flex;gap:30px;align-items:flex-end;height:170px;border-bottom:1px solid var(--ln);padding:0 20px}
+.chart div{flex:1;border-radius:6px 6px 0 0;text-align:center;font-size:12px;padding-top:4px;color:#fff;font-weight:700;transition:height .6s}
+details{background:var(--card);border:1px solid var(--ln);border-radius:10px;padding:10px 14px;margin-bottom:8px}summary{cursor:pointer;color:var(--b)}
+.arch{display:flex;flex-direction:column;align-items:center;gap:6px}.arch .n{border:1px solid var(--b);border-radius:8px;padding:8px 18px;background:var(--card2);min-width:200px;text-align:center}
+.arch .row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}.arch .ar{color:var(--g)}
+.mx{border:1px dashed var(--g);border-radius:12px;padding:10px;text-align:center;color:var(--g);font-size:12px;width:100%;max-width:560px}
+.concepts{display:flex;flex-wrap:wrap;gap:8px}.concepts button{cursor:pointer}
+.cx{margin-top:12px;min-height:60px;border-left:3px solid var(--g)}
+body::before{content:"";position:fixed;inset:0;z-index:-1;background:radial-gradient(circle at 15% 20%,#a77fe655 0,transparent 40%),radial-gradient(circle at 85% 15%,#5bb8f560 0,transparent 42%),radial-gradient(circle at 70% 85%,#c9a8f048 0,transparent 45%),radial-gradient(circle at 10% 90%,#8fd3ff4a 0,transparent 40%);background-size:140% 140%;animation:bgm 16s ease-in-out infinite alternate}
+body::after{content:"";position:fixed;inset:0;z-index:-1;background-image:radial-gradient(#6f7aa345 1px,transparent 1.3px);background-size:26px 26px;-webkit-mask-image:linear-gradient(#000,transparent 85%);mask-image:linear-gradient(#000,transparent 85%)}
+@keyframes bgm{from{background-position:0% 0%}to{background-position:100% 100%}}
+#fx{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
+#fx .o{position:absolute;border-radius:50%;filter:blur(60px);opacity:.55}
+.o1{width:420px;height:420px;background:#a77fe6;left:-80px;top:10%;animation:d1 22s ease-in-out infinite alternate}
+.o2{width:380px;height:380px;background:#5bb8f5;right:-60px;top:35%;animation:d2 26s ease-in-out infinite alternate}
+.o3{width:340px;height:340px;background:#d8b8ff;left:35%;bottom:-120px;animation:d3 30s ease-in-out infinite alternate}
+@keyframes d1{to{transform:translate(35vw,30vh) scale(1.2)}}
+@keyframes d2{to{transform:translate(-40vw,-25vh) scale(.85)}}
+@keyframes d3{to{transform:translate(-25vw,-35vh) scale(1.25)}}
+.wv{position:absolute;left:0;bottom:0;width:200%;height:130px;animation:sl 18s linear infinite}
+.w2{height:100px;bottom:-10px;animation-duration:12s;animation-direction:reverse}
+@keyframes sl{to{transform:translateX(-50%)}}
+
+@media (prefers-reduced-motion:reduce){body::before,#fx .o,.wv{animation:none}}
+:root[data-theme=dark]{--bg:#0d0f1f;--card:#161a33;--card2:#1e2342;--tx:#e8eaf8;--mut:#98a2c8;--g:#a98af0;--b:#5db4ff;--ln:#2b3157;--r:#ff6b81;--y:#ffc861}
+[data-theme=dark] nav{background:#0d0f1fee}
+[data-theme=dark] .card{box-shadow:0 8px 24px #00000055}
+[data-theme=dark] #fx .o{opacity:.28}
+[data-theme=dark] .wv{opacity:.6}
+[data-theme=dark] .btn.p,[data-theme=dark] .chart div{color:#10122a}
+#tg{margin-left:auto;padding:3px 12px;font-size:12px;white-space:nowrap}
+</style></head><body><div id="fx" aria-hidden="true"><b class="o o1"></b><b class="o o2"></b><b class="o o3"></b><svg class="wv" viewBox="0 0 2400 120" preserveAspectRatio="none"><path d="M0 60 Q150 10 300 60 T600 60 T900 60 T1200 60 T1500 60 T1800 60 T2100 60 T2400 60 V120 H0Z" fill="#9b70e2" opacity=".2"/></svg><svg class="wv w2" viewBox="0 0 2400 120" preserveAspectRatio="none"><path d="M0 60 Q150 10 300 60 T600 60 T900 60 T1200 60 T1500 60 T1800 60 T2100 60 T2400 60 V120 H0Z" fill="#2f9be0" opacity=".18"/></svg></div>
+<nav><a href="#home">Home</a><a href="#overview">Overview</a><a href="#config">Config</a><a href="#sim">Simulation</a><a href="#mutex">Mutex</a><a href="#perf">Performance</a><button class="btn" id="tg">🌙 Dark</button></nav>
+
+<section id="home"><div class="hero"><div>
+<div class="mono" style="color:var(--g)">$ ./producer --pthread</div>
+<h1 class="grad">Multithreaded Linux Application</h1>
+<p class="sub" style="font-size:17px">POSIX Threads, Mutexes &amp; the Producer-Consumer Problem. See how a 2,000,000-element workload is split into chunks, buffered and processed by worker threads.</p>
+<a href="#sim"><button class="btn p">▶ Start Simulation</button></a>
+</div><div class="card"><div class="mono" style="font-size:12px;color:var(--mut);margin-bottom:8px">worker threads · live</div>
+<div class="lanes" id="lanes"></div></div></div></section>
+
+<section id="overview"><h2>Overview</h2><p class="sub">Tap a concept for a plain-language explanation.</p>
+<div class="concepts" id="cbtn"></div><div class="card cx" id="ctext">Pick a concept above.</div></section>
+
+<section id="config"><h2>System Configuration</h2><p class="sub">Defaults match your program output. Edit any value and press Apply to restart the simulation with it.</p>
+<div class="grid g4" id="stats"></div>
+<div style="margin-top:12px"><button class="btn p" id="cap">Apply</button> <button class="btn" id="cdf">Restore defaults</button> <span class="mono" id="cerr" style="color:var(--y);font-size:12px"></span></div></section>
+
+<section id="sim"><h2>Producer-Consumer Simulation</h2><p class="sub">Producer → bounded buffer → worker threads (sizes set in System Configuration). Animated in JavaScript; the C program is not executed in the browser.</p>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+<button class="btn p" id="bs">Start</button><button class="btn" id="bp">Pause</button><button class="btn" id="br">Reset</button>
+<label class="mono" style="font-size:12px;color:var(--mut)">speed <input type="range" id="spd" min="1" max="10" value="4"></label></div>
+<div class="card"><div class="mono" style="font-size:13px"><span class="led" id="pl"></span>Producer: <span id="pst">idle</span> · dataset <span id="ds">2,000,000</span> → <span id="nc">200</span> chunks (<span id="prod">0</span> produced)</div>
+<div class="slots" id="slots"></div>
+<div class="mono" style="font-size:12px;color:var(--mut)">Buffer: <span id="occ">0</span>/<span id="cp">16</span> · <span id="bst" style="color:var(--y)">EMPTY</span> · Completed: <b id="done" style="color:var(--g)">0</b>/<span id="tt">200</span></div>
+<div class="bar" style="margin:8px 0"><div id="prog"></div></div></div>
+<div class="grid g4" style="margin-top:14px" id="workers"></div>
+<div class="card mono" id="final" style="margin-top:14px;font-size:13px;color:var(--mut)">Final output appears when all 200 tasks finish.</div></section>
+
+<section id="mutex"><h2>Mutex Visualization</h2><p class="sub">Click a thread to make it request the lock. Only one can be inside the critical section.</p>
+<div class="grid g2"><div class="card"><div class="lockbox" id="lb"><div class="lock" id="li">🔓</div><div class="mono" id="lt">UNLOCKED</div><div class="mono" style="font-size:12px;color:var(--mut)" id="lq">queue: empty</div></div>
+<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap" id="mb"></div></div>
+</div>
+<div class="card" style="margin-top:14px"><b>Bounded buffer</b><p style="margin:4px 0 0;color:var(--mut)">Only a fixed number of slots exist. If full, the producer waits; if empty, consumers wait. This caps memory use and keeps producer and consumers in step instead of storing unlimited tasks.</p></div></section>
+
+<section id="perf"><h2>Performance Comparison</h2><p class="sub">Sequential values are from the program. The parallel time is illustrative simulation data; replace it with your own run.</p>
+<div class="grid g2"><div class="card"><div class="chart"><div id="c1" style="background:var(--b)"></div><div id="c2" style="background:var(--g)"></div></div>
+<div style="display:flex;gap:30px;padding:6px 20px;font-size:12px;color:var(--mut)"><span style="flex:1;text-align:center">Sequential</span><span style="flex:1;text-align:center">Multithreaded</span></div></div>
+<div class="card mono" style="font-size:13px">
+<div>Sequential result: 95998839</div><div>Multithreaded result: 95998839</div><div style="color:var(--g)">Correctness: ✔ MATCH</div>
+<div>Sequential time: <span id="ts">0.0071</span> s (actual)</div>
+<div>Parallel time: <input id="tp" type="number" step="0.0001" value="0.0094" style="width:90px;background:var(--card2);color:var(--tx);border:1px solid var(--ln);border-radius:4px;padding:2px 4px"> s (simulation)</div>
+<div style="margin-top:8px">Speedup = Sequential Time / Parallel Time</div>
+<div>= <b id="sp" style="color:var(--b)"></b>×</div>
+<p style="font-family:system-ui;color:var(--mut);font-size:13px;margin:8px 0 0" id="spn"></p></div></div></section>
+
+
+
+
+
+<script>
+const $=s=>document.querySelector(s);
+// hero lanes
+$('#lanes').innerHTML=[0,1,2,3].map(i=>`<div class="lane"><i style="animation-delay:${-i*.7}s;animation-duration:${2.4+i*.5}s"></i></div>`).join('');
+// concepts
+const C={'Multithreading':'Running several threads inside one program so different parts of the work run at the same time.','Parallel processing':'Splitting a big job into parts that run simultaneously, then combining results. Useful when each part is independent.','Pthreads':'POSIX Threads: the C library (pthread_create, pthread_join, mutexes) used to create and manage threads on Linux. Compile with -pthread.','Synchronization':'Coordinating threads so shared data is accessed safely and in the right order.','Mutex':'A lock. One thread locks it, uses shared data, then unlocks it so the next thread can enter.','Producer-Consumer':'One side creates tasks (producer), the other processes them (consumers), connected by a shared buffer.','Bounded buffer':'A fixed-size queue. Producer waits when full, consumers wait when empty.','Process vs Thread':'A process is a running program with its own memory. Threads live inside a process and share its memory, so they are lighter but need synchronization.','Speedup':'Sequential time divided by parallel time. Above 1 means faster; thread overhead can push it below 1 on small workloads.'};
+$('#cbtn').innerHTML=Object.keys(C).map(k=>`<button class="btn">${k}</button>`).join('');
+$('#cbtn').onclick=e=>{if(e.target.tagName=='BUTTON')$('#ctext').innerHTML=`<b>${e.target.textContent}</b><br>${C[e.target.textContent]}`};
+// stats
+const D={cores:8,data:2000000,chunk:10000,cap:16,nw:16};let cfg={...D};const F=[['cores','CPU cores (auto)'],['data','Dataset elements'],['chunk','Chunk size'],['cap','Buffer slots'],['nw','Worker threads']];function fill(){F.forEach(f=>$('#f_'+f[0]).value=cfg[f[0]]);$('#tot').textContent=Math.ceil(cfg.data/cfg.chunk)}
+$('#stats').innerHTML=F.map(f=>`<div class="card stat"><input type="number" min="1" id="f_${f[0]}"><small>${f[1]}</small></div>`).join('')+'<div class="card stat"><b id="tot">200</b><small>Total work items (auto)</small></div>';$('#f_cores').readOnly=true;$('#stats').oninput=()=>{const n=parseInt($('#f_nw').value),t=Math.ceil($('#f_data').value/$('#f_chunk').value);$('#f_cores').value=n>0?Math.ceil(n/2):'';$('#tot').textContent=isFinite(t)&&t>0?t:''};
+// simulation
+let st,timer=null;let NW=16,CAP=16,TOT=200,CH=10000;
+function init(){st={prod:0,buf:[],done:0,w:[...Array(NW)].map(()=>({t:null,left:0,len:1,n:0})),fin:false};render();$('#final').innerHTML='Final output appears when all 200 tasks finish.'}
+const buildW=()=>$('#workers').innerHTML=[...Array(NW).keys()].map(i=>`<div class="card w"><b><span class="led" id="wl${i}"></span>Worker ${i}</b><div class="t" id="wt${i}">idle</div><div class="bar"><div id="wp${i}"></div></div><div class="mono" style="font-size:12px;color:var(--mut);margin-top:6px">processed: <span id="wn${i}">0</span></div></div>`).join('');
+function render(){
+$('#slots').innerHTML=[...Array(CAP)].map((_,i)=>st.buf[i]!==undefined?`<div class="slot f">#${st.buf[i]}</div>`:'<div class="slot">empty</div>').join('');
+$('#occ').textContent=st.buf.length;$('#bst').textContent=st.buf.length==CAP?'FULL – producer waits':st.buf.length==0?'EMPTY – consumers wait':'OK';
+$('#prod').textContent=st.prod;$('#done').textContent=st.done;$('#prog').style.width=st.done/TOT*100+'%';
+$('#pl').className='led'+(st.prod<TOT?(st.buf.length==CAP?' wait':' on'):'');
+$('#pst').textContent=st.prod>=TOT?'finished':st.buf.length==CAP?'buffer full, waiting':'producing';
+st.w.forEach((w,i)=>{$('#wl'+i).className='led'+(w.t!==null?' on':'');$('#wt'+i).textContent=w.t!==null?`task #${w.t} [${w.t*CH}, ${Math.min((w.t+1)*CH,cfg.data)})`:(st.buf.length?'idle':'waiting for task');$('#wp'+i).style.width=w.t!==null?(1-w.left/w.len)*100+'%':'0';$('#wn'+i).textContent=w.n})}
+function tick(){
+for(let k=0;k<4;k++){if(st.prod<TOT&&st.buf.length<CAP)st.buf.push(st.prod++)}
+st.w.forEach(w=>{if(w.t===null){if(st.buf.length&&Math.random()<.8){w.t=st.buf.shift();w.len=w.left=12+Math.floor(Math.random()*10)}}else if(--w.left<=0){w.n++;st.done++;w.t=null}});
+render();
+if(st.done>=TOT){clearInterval(timer);timer=null;st.fin=true;$('#final').innerHTML=`<span style="color:var(--g)">FINAL RESULT</span><br>Partial results from ${NW} workers combined · ${TOT}/${TOT} tasks · ${cfg.data.toLocaleString()} elements<br>`+(cfg.data==2000000?'Result = 95998839 · Correctness ✔':'Custom configuration: all tasks completed ✔');}}
+function run(){if(timer||st.fin)return;timer=setInterval(tick,Math.round(260-$('#spd').value*22))}
+$('#bs').onclick=run;$('#bp').onclick=()=>{clearInterval(timer);timer=null};
+$('#br').onclick=()=>{clearInterval(timer);timer=null;init()};
+$('#spd').oninput=()=>{if(timer){clearInterval(timer);timer=null;run()}};
+function applyCfg(){const v=k=>parseInt($('#f_'+k).value);const c={cores:v('cores'),data:v('data'),chunk:v('chunk'),cap:v('cap'),nw:v('nw')};
+if(Object.values(c).some(x=>!(x>0))||c.chunk>c.data||c.cap>64||c.nw>64||Math.ceil(c.data/c.chunk)>2000){$('#cerr').textContent='Use positive whole numbers: chunk ≤ dataset, buffer and workers ≤ 64, at most 2000 work items.';return}
+$('#cerr').textContent='';cfg=c;NW=c.nw;CAP=c.cap;CH=c.chunk;TOT=Math.ceil(c.data/c.chunk);clearInterval(timer);timer=null;
+fill();$('#tt').textContent=TOT;$('#nc').textContent=TOT;$('#ds').textContent=c.data.toLocaleString();$('#cp').textContent=CAP;
+$('#slots').style.gridTemplateColumns='repeat('+Math.min(CAP,8)+',1fr)';buildW();init()}
+$('#cap').onclick=applyCfg;$('#cdf').onclick=()=>{cfg={...D};fill();applyCfg()};
+fill();buildW();init();
+// mutex demo
+let holder=null,q=[];
+$('#mb').innerHTML=[0,1,2,3].map(i=>`<button class="btn" data-i="${i}">Thread ${i} → request</button>`).join('')+'<button class="btn p" id="rel">Unlock</button>';
+function mr(){const l=holder!==null;$('#lb').className='lockbox'+(l?' l':'');$('#li').textContent=l?'🔒':'🔓';$('#lt').textContent=l?`LOCKED · Thread ${holder} in critical section`:'UNLOCKED';$('#lq').textContent='queue: '+(q.length?q.map(x=>'T'+x).join(', '):'empty')}
+$('#mb').onclick=e=>{const b=e.target;if(b.id=='rel'){if(holder===null)return;holder=q.length?q.shift():null;mr();return}
+if(b.dataset.i===undefined)return;const i=+b.dataset.i;if(holder===i||q.includes(i))return;if(holder===null)holder=i;else q.push(i);mr()};mr();
+// perf
+function perf(){const s=.0071,p=+$('#tp').value||.0001,sp=s/p,m=Math.max(s,p);$('#c1').style.height=s/m*150+'px';$('#c1').textContent=s+' s';$('#c2').style.height=p/m*150+'px';$('#c2').textContent=p+' s';$('#sp').textContent=sp.toFixed(2);
+$('#spn').textContent=sp<1?'Speedup below 1: for a small, fast workload, thread creation, locking and buffer handoff cost more than they save.':'Parallel version is faster than sequential.'}
+$('#tp').oninput=perf;perf();
+// terminal
+
+
+// viva
+
+
+
+(()=>{const r=document.documentElement,b=$('#tg');const set=d=>{r.dataset.theme=d?'dark':'light';b.textContent=d?'☀️ Light':'🌙 Dark';try{localStorage.setItem('th',d?'d':'l')}catch(e){}};let d=false;try{d=localStorage.getItem('th')=='d'}catch(e){}set(d);b.onclick=()=>set(r.dataset.theme!='dark')})();
+</script></body></html>
